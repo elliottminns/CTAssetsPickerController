@@ -30,8 +30,10 @@
 #import "CTAssetsPickerController.h"
 #import "NSDate+TimeInterval.h"
 
+#import <tgmath.h>
+
 #define IS_IOS7             ([[[UIDevice currentDevice] systemVersion] compare:@"7.0" options:NSNumericSearch] != NSOrderedAscending)
-#define kThumbnailLength    78.0f
+#define kThumbnailLength    [UIScreen mainScreen].bounds.size.width/4.0 - 1.0
 #define kThumbnailSize      CGSizeMake(kThumbnailLength, kThumbnailLength)
 #define kPopoverContentSize CGSizeMake(320, 480)
 
@@ -468,7 +470,7 @@
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-    return kThumbnailLength + 12;
+    return 78 + 12;
 }
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
@@ -507,7 +509,7 @@
     
     CGImageRef posterImage      = assetsGroup.posterImage;
     size_t height               = CGImageGetHeight(posterImage);
-    float scale                 = height / kThumbnailLength;
+    float scale                 = height / 78;
     
     self.imageView.image        = [UIImage imageWithCGImage:posterImage scale:scale orientation:UIImageOrientationUp];
     self.textLabel.text         = [assetsGroup valueForProperty:ALAssetsGroupPropertyName];
@@ -549,8 +551,8 @@
     else
     {
         self.layout.sectionInset            = UIEdgeInsetsMake(9.0, 0, 0, 0);
-        self.layout.minimumInteritemSpacing = 2.0;
-        self.layout.minimumLineSpacing      = 2.0;
+        self.layout.minimumInteritemSpacing = 1.0;
+        self.layout.minimumLineSpacing      = 1.0;
     }
     
     if (self = [super initWithCollectionViewLayout:self.layout])
@@ -601,8 +603,8 @@
     else
     {
         self.layout.sectionInset            = UIEdgeInsetsMake(9.0, 0, 0, 0);
-        self.layout.minimumInteritemSpacing = 2.0;
-        self.layout.minimumLineSpacing      = 2.0;
+        self.layout.minimumInteritemSpacing = 1.0;
+        self.layout.minimumLineSpacing      = 1.0;
     }
     
     [self.collectionView setCollectionViewLayout:self.layout animated:YES];
@@ -718,6 +720,22 @@
     CTAssetsPickerController *vc = (CTAssetsPickerController *)self.navigationController;
     ALAsset* asset = [self.assets objectAtIndex:indexPath.row];
     BOOL selectable = [vc.selectionFilter evaluateWithObject:asset];
+    
+    CGSize dimensions = asset.defaultRepresentation.dimensions;
+    
+    NSString *fileName = [[[asset defaultRepresentation] filename] lowercaseString];
+    if (!([fileName hasSuffix:@".jpg"] || [fileName hasSuffix:@".jpeg"] || [fileName hasSuffix:@"png"])) {
+        UIAlertView *av = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Sorry!", @"") message:NSLocalizedString(@"Only JPEG & PNG images are supported", @"") delegate:nil cancelButtonTitle:NSLocalizedString(@"OK", @"") otherButtonTitles:nil];
+        [av show];
+        return NO;
+    }
+    
+    if (fmin(dimensions.height, dimensions.width) < vc.minimumNumberOfPixelsForSmallerDimension){
+        NSString *message = [NSString stringWithFormat:@"The size of the image you selected is too small. Please select a photo taken from the back camera of your %@ or other high-quality source.\n\nMust be at least %ldpx by %ldpx\nThis is %.00fpx by %.00fpx", [UIDevice currentDevice].localizedModel, vc.minimumNumberOfPixelsForSmallerDimension, vc.minimumNumberOfPixelsForSmallerDimension, dimensions.width, dimensions.height];
+        UIAlertView *av = [[UIAlertView alloc] initWithTitle:NSLocalizedString(@"Quality Matters!", @"") message:NSLocalizedString(message, @"") delegate:nil cancelButtonTitle:NSLocalizedString(@"OK", @"") otherButtonTitles:nil];
+        [av show];
+        return NO;
+    }
 
     return (selectable && collectionView.indexPathsForSelectedItems.count < vc.maximumNumberOfSelection);
 }
@@ -773,18 +791,27 @@
             break;
     }
     
+    CTAssetsPickerController *vc = (CTAssetsPickerController *)self.navigationController;
     NSString *format;
     
     if (photosSelected && videoSelected)
         format = NSLocalizedString(@"%ld Items Selected", nil);
     
+    else if (photosSelected && vc.maximumNumberOfSelection > 0){
+         format = (indexPaths.count > 1) ? NSLocalizedString(@"%ld of %ld Photos Selected", nil) : NSLocalizedString(@"%ld of %ld Photo Selected", nil);
+    }
+    
     else if (photosSelected)
         format = (indexPaths.count > 1) ? NSLocalizedString(@"%ld Photos Selected", nil) : NSLocalizedString(@"%ld Photo Selected", nil);
+    
+    else if (videoSelected && vc.maximumNumberOfSelection > 0){
+        format = (indexPaths.count > 1) ? NSLocalizedString(@"%ld of %ld Videos Selected", nil) : NSLocalizedString(@"%ld of %ld Videos Selected", nil);
+    }
 
     else if (videoSelected)
         format = (indexPaths.count > 1) ? NSLocalizedString(@"%ld Videos Selected", nil) : NSLocalizedString(@"%ld Video Selected", nil);
     
-    self.title = [NSString stringWithFormat:format, (long)indexPaths.count];
+    self.title = vc.maximumNumberOfSelection == 0 ? [NSString stringWithFormat:format, (long)indexPaths.count] : [NSString stringWithFormat:format, (long)indexPaths.count, vc.maximumNumberOfSelection];
 }
 
 
